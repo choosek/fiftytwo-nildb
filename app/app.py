@@ -1,9 +1,7 @@
 import sys
 import os
 import ssl
-import asyncio
 import random
-import json
 from flask import Flask, jsonify
 from flask_cors import CORS
 from secretvaults import SecretVaultWrapper, OperationType
