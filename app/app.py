@@ -97,13 +97,22 @@ async def get_deck_from_nildb():
         sys.exit(1)
 
 @app.route("/")
-def health():
+def home():
     return "OK"
 
-@app.route("/cards")
+@app.route("/api/cards")
 async def cards():
     deck = await get_deck_from_nildb()
     return jsonify({"cards": [int_to_card[i] for i in deck]})
+
+# kubernetes health check routes
+@app.route("/api/health", methods=["GET"])
+def health():
+    return "", 200
+
+@app.route("/api/ready", methods=["GET"])
+def ready():
+    return "", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=os.getenv("FLASK_RUN_PORT", 5001))
