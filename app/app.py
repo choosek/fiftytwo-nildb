@@ -23,13 +23,23 @@ CARDS = [
 ]
 
 @app.route("/")
-def health():
+def home():
     return "OK"
 
-@app.route("/cards")
+@app.route("/api/cards")
 def cards():
     random.shuffle(CARDS)
     return jsonify({"cards": CARDS})
+
+# Routes for kubernetes health checks
+@app.route("/api/health", methods=["GET"])
+def health():
+    return "", 200
+
+@app.route("/api/ready", methods=["GET"])
+def ready():
+    return "", 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=os.getenv("FLASK_RUN_PORT", 5001))
