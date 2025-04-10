@@ -56,33 +56,28 @@ async def get_deck_from_nildb():
         collection = SecretVaultWrapper(
             org_config["nodes"],
             org_config["org_credentials"],
-            "e4688214-2014-48f6-ba19-251e1a58fb43", # Schema ID.
+            "145e0ed3-5d6b-4fc9-93b2-7855a9bb6e7c", # Schema ID.
             operation=OperationType.STORE,
         )
         await collection.init()
 
         # Put a deck into the database.
-        deck = [
-            {"card": i}
-            for i in range(52)
-        ]
-        random.shuffle(deck)
-        data_written = await collection.write_to_nodes(deck)
-        new_ids = list(
+        deck = {'deck': [{'card': i} for i in range(52)]}
+        random.shuffle(deck['deck'])
+        data_written = await collection.write_to_nodes([deck])
+        deck_id = list(
             {
                 created_id
                 for item in data_written
-                if item.get("result")
-                for created_id in item["result"]["data"]["created"]
+                if item.get('result')
+                for created_id in item['result']['data']['created']
             }
-        )
+        )[0]
 
         # Retreive the deck from the database.
-        data_read = await collection.read_from_nodes()
-        return [
-            card["card"] 
-            for card in data_read[:52]
-        ]
+        data_read = await collection.read_from_nodes({'_id': deck_id})
+        await collection.delete_data_from_nodes({'_id': deck_id})
+        return [card['card'] for card in data_read[0]['deck']]
 
     except RuntimeError as error:
         print(f"Failed to use SecretVaultWrapper: {str(error)}")
