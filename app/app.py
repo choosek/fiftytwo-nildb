@@ -56,22 +56,14 @@ async def get_deck_from_nildb():
         collection = SecretVaultWrapper(
             org_config["nodes"],
             org_config["org_credentials"],
-            "51dba4eb-b5e7-4c54-9059-867ff592d1ae", # Schema ID.
+            "e4688214-2014-48f6-ba19-251e1a58fb43", # Schema ID.
             operation=OperationType.STORE,
         )
         await collection.init()
 
         # Put a deck into the database.
         deck = [
-            {
-                "years_in_web3": {"%allot": 0},
-                "responses": [
-                    {
-                        "rating": 1,
-                        "question_number": 1 + i,
-                    }
-                ],
-            }
+            {"card": i}
             for i in range(52)
         ]
         random.shuffle(deck)
@@ -88,7 +80,7 @@ async def get_deck_from_nildb():
         # Retreive the deck from the database.
         data_read = await collection.read_from_nodes()
         return [
-            card["responses"][0]["question_number"] - 1 
+            card["card"] 
             for card in data_read[:52]
         ]
 
