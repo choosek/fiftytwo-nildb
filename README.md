@@ -1,2 +1,2 @@
 # fiftytwo-nildb
-web server mock for fiftytwo.gg
+Integration layer between fiftytwo application instance and nilDB infrastructure.

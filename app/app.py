@@ -4,7 +4,8 @@ import ssl
 import random
 from flask import Flask, jsonify
 from flask_cors import CORS
-from secretvaults import SecretVaultWrapper, OperationType
+from bitlist import bitlist
+from secretvaults import SecretVaultWrapper, OperationType, KeyType
 
 # Avoid SSL/HTTPS issues.
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -29,6 +30,9 @@ org_config = {
         },
     ],
 }
+"""
+This application relies on the nilDB cluster consisting of three nilDB nodes.
+"""
 
 app = Flask(__name__)
 CORS(app)
@@ -50,34 +54,88 @@ int_to_card = [
     "Kc", "Kd", "Kh", "Ks",
     "Ac", "Ad", "Ah", "As"
 ]
+"""
+Table for converting integers to cards as they are represented internally in
+FiftyTwo.
+"""
 
 async def get_deck_from_nildb():
+    """
+    Query the nilDB network to obtain a random sequence of bits and use rejection
+    sampling to convert that sequence into a deck of cards.
+    """
     try:
         collection = SecretVaultWrapper(
             org_config["nodes"],
             org_config["org_credentials"],
             "145e0ed3-5d6b-4fc9-93b2-7855a9bb6e7c", # Schema ID.
-            operation=OperationType.STORE,
+            operation=OperationType.SUM,
+            encryption_key_type=KeyType.CLUSTER,
+            encryption_secret_key=None
         )
         await collection.init()
 
-        # Put a deck into the database.
-        deck = {'deck': [{'card': i} for i in range(52)]}
-        random.shuffle(deck['deck'])
-        data_written = await collection.write_to_nodes([deck])
-        deck_id = list(
-            {
-                created_id
-                for item in data_written
-                if item.get('result')
-                for created_id in item['result']['data']['created']
+        # Add the query used to create the random sequence of bits.
+        # This `try-except` block will fail if the query already exists
+        # (which should occur in all executions other than the first one).
+        try:
+            query = {
+                "variables": {},
+                "pipeline": [
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "sequence": [
+                                {
+                                    "%share": {
+                                        "$floor": {
+                                            "$multiply": [{"$rand": {}}, 4294967311]
+                                        }
+                                    }
+                                }
+                                for i in range(100)
+                            ]
+                        }
+                    },
+                    {"$limit": 1}
+                ]
             }
-        )[0]
 
-        # Retreive the deck from the database.
-        data_read = await collection.read_from_nodes({'_id': deck_id})
-        await collection.delete_data_from_nodes({'_id': deck_id})
-        return [card['card'] for card in data_read[0]['deck']]
+            result = await collection.create_query(
+                query,
+                "51dba4eb-b5e7-4c54-9059-867ff592d1ae",
+                "test-query-0000",
+                "ef596d21-c1b9-4997-acff-ea621d2a0007" # Query ID
+            )
+            print(result)
+        except:
+            pass
+
+        # Perform the query to obtain the sequence of random 32-bit integers.
+        result = await collection.query_execute_on_nodes({
+            "id": "ef596d21-c1b9-4997-acff-ea621d2a0007",
+            "variables": {},
+        })
+
+        # Convert the sequence of 32-bit integers into a bit vector.
+        bs = bytes()
+        for i in result[0]['sequence']:
+            bs = bs + int(i + 2**31).to_bytes(4, 'little')
+        bs = bitlist(bs)
+
+        # Select cards via rejection sampling from portions of the bit vector.
+        cards = list(int_to_card) # Copy of deck from which cards are drawn.
+        deck = []
+        while len(cards) > 0:
+            i = None
+            while i is None or i >= len(cards):
+                l = len(cards).bit_length()
+                (b, bs) = (bs[:l], bs[l:])
+                i = int.from_bytes(b.to_bytes(), 'little')
+            deck.append(cards[i])
+            del cards[i]
+
+        return deck
 
     except RuntimeError as error:
         print(f"Failed to use SecretVaultWrapper: {str(error)}")
@@ -90,7 +148,7 @@ def home():
 @app.route("/api/cards")
 async def cards():
     deck = await get_deck_from_nildb()
-    return jsonify({"cards": [int_to_card[i] for i in deck]})
+    return jsonify({"cards": deck})
 
 # kubernetes health check routes
 @app.route("/api/health", methods=["GET"])
