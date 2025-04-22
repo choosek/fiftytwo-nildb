@@ -1,7 +1,6 @@
 import sys
 import os
 import ssl
-import random
 from flask import Flask, jsonify
 from flask_cors import CORS
 from bitlist import bitlist
