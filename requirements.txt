@@ -1,3 +1,4 @@
 flask[async]==3.1.0
 flask-cors==5.0.1
 secretvaults==0.0.0a7
+gunicorn==23.0.0
